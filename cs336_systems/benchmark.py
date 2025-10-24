@@ -43,9 +43,13 @@ class BenchmarkConfig:
     # Logging infra
     mlflow_tracking_uri: str = "http://mlflow.sutroplanet.com"
     mlflow_experiment_name: str = "cs336-assignment2-benchmarking"
+    mlflow_run_suffix: str | None = None
+    enable_logging: bool = False
 
     def __str__(self):
-        return f"d_model{self.d_model}num_layer{self.num_layers}"
+        prefix = f"d_model{self.d_model}num_layer{self.num_layers}"
+        suffix = "" if self.mlflow_run_suffix is None else self.mlflow_run_suffix
+        return f"{prefix}{suffix}"
 
 
 def generate_rand_batch(cfg: BenchmarkConfig) -> tuple[torch.Tensor, torch.Tensor]:
@@ -63,43 +67,48 @@ def run_benchmark(cfg: BenchmarkConfig):
     with mlflow.start_run(run_name=str(cfg)):
         mlflow.log_params(asdict(cfg))
 
-        lm = BasicsTransformerLM(
-            vocab_size=cfg.vocab_size,
-            context_length=cfg.max_seq_len,
-            d_model=cfg.d_model,
-            num_layers=cfg.num_layers,
-            num_heads=cfg.num_heads,
-            d_ff=cfg.d_ff,
-            rope_theta=cfg.rope_theta
-        ).to(cfg.device)
+        with torch.cuda.nvtx.range(f"load_model"):
+            lm = BasicsTransformerLM(
+                vocab_size=cfg.vocab_size,
+                context_length=cfg.max_seq_len,
+                d_model=cfg.d_model,
+                num_layers=cfg.num_layers,
+                num_heads=cfg.num_heads,
+                d_ff=cfg.d_ff,
+                rope_theta=cfg.rope_theta
+            ).to(cfg.device)
 
-        input_data, targets = generate_rand_batch(cfg)
+        with torch.cuda.nvtx.range(f"generate_input_batch"):
+            input_data, targets = generate_rand_batch(cfg)
+
         optimizer = torch.optim.AdamW(lm.parameters(), lr=cfg.learning_rate)
 
         forward_times = []
         backward_times = []
 
         for step in range(cfg.max_steps):
-            optimizer.zero_grad()
+            with torch.cuda.nvtx.range(f"step_{step}"):
+                timer_forward_start = timeit.default_timer()
+                with torch.cuda.nvtx.range(f"forward"):
+                    logits = lm(input_data)
+                    torch.cuda.synchronize(cfg.device)
+                timer_forward_end = timeit.default_timer()
+                forward_elapsed = timer_forward_end - timer_forward_start
 
-            timer_forward_start = timeit.default_timer()
-            logits = lm(input_data)
-            torch.cuda.synchronize(cfg.device)
-            timer_forward_end = timeit.default_timer()
-            forward_elapsed = timer_forward_end - timer_forward_start
+                loss = nn.functional.cross_entropy(
+                    logits.reshape(-1, cfg.vocab_size),
+                    targets.reshape(-1)
+                )
 
-            loss = nn.functional.cross_entropy(
-                logits.reshape(-1, cfg.vocab_size),
-                targets.reshape(-1)
-            )
+                timer_backward_start = timeit.default_timer()
+                with torch.cuda.nvtx.range(f"backward"):
+                    loss.backward()
+                    torch.cuda.synchronize(cfg.device)
+                timer_backward_end = timeit.default_timer()
+                backward_elapsed = timer_backward_end - timer_backward_start
 
-            timer_backward_start = timeit.default_timer()
-            loss.backward()
-            torch.cuda.synchronize(cfg.device)
-            timer_backward_end = timeit.default_timer()
-            backward_elapsed = timer_backward_end - timer_backward_start
-
-            optimizer.step()
+                with torch.cuda.nvtx.range(f"optimizer_step"):
+                    optimizer.step()
 
             if step < cfg.warmup_steps:
                 continue
@@ -134,4 +143,5 @@ def run_benchmark(cfg: BenchmarkConfig):
 if __name__ == '__main__':
     cfg = BenchmarkConfig()
 
-    run_benchmark(cfg)
+    with torch.cuda.nvtx.range("run_benchmark"):
+        run_benchmark(cfg)
