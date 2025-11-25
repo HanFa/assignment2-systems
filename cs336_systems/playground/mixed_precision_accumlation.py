@@ -1,0 +1,27 @@
+import torch
+
+if __name__ == '__main__':
+    s = torch.tensor(0, dtype=torch.float32)
+    for idx in range(1000):
+        s += torch.tensor(0.01, dtype=torch.float32)
+
+    print(s)
+
+    s = torch.tensor(0, dtype=torch.float16)
+    for idx in range(1000):
+        s += torch.tensor(0.01, dtype=torch.float16)
+
+    print(s)
+
+    s = torch.tensor(0, dtype=torch.float32)
+    for idx in range(1000):
+        s += torch.tensor(0.01, dtype=torch.float16)
+
+    print(s)
+
+    s = torch.tensor(0, dtype=torch.float32)
+    for idx in range(1000):
+        x = torch.tensor(0.01, dtype=torch.float16)
+        s += x.type(torch.float32)
+
+    print(s)
