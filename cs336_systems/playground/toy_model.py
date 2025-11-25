@@ -18,6 +18,79 @@ class ToyModel(nn.Module):
         return x
 
 
+class TransformerBlock(nn.Module):
+    """A single transformer block with multi-head attention and feed-forward network."""
+
+    def __init__(self, d_model: int, d_ff: int, num_heads: int):
+        super().__init__()
+        self.attention = nn.MultiheadAttention(d_model, num_heads, batch_first=True)
+        self.ln1 = nn.LayerNorm(d_model)
+        self.ff = nn.Sequential(
+            nn.Linear(d_model, d_ff),
+            nn.GELU(),
+            nn.Linear(d_ff, d_model)
+        )
+        self.ln2 = nn.LayerNorm(d_model)
+
+    def forward(self, x):
+        # Self-attention with residual connection
+        attn_out, _ = self.attention(x, x, x)
+        x = self.ln1(x + attn_out)
+
+        # Feed-forward with residual connection
+        ff_out = self.ff(x)
+        x = self.ln2(x + ff_out)
+
+        return x
+
+
+class LanguageModel(nn.Module):
+    """A simple language model with multiple transformer blocks."""
+
+    def __init__(self, d_model: int, d_ff: int, num_layers: int, num_heads: int, vocab_size: int):
+        super().__init__()
+        self.d_model = d_model
+
+        # Embedding layer
+        self.embedding = nn.Embedding(vocab_size, d_model)
+
+        # Transformer blocks
+        self.blocks = nn.ModuleList([
+            TransformerBlock(d_model, d_ff, num_heads)
+            for _ in range(num_layers)
+        ])
+
+        # Output layer
+        self.ln_final = nn.LayerNorm(d_model)
+        self.lm_head = nn.Linear(d_model, vocab_size)
+
+    def forward(self, input_ids):
+        # Embed input tokens
+        x = self.embedding(input_ids)
+
+        # Pass through transformer blocks
+        for block in self.blocks:
+            x = block(x)
+
+        # Final layer norm and output projection
+        x = self.ln_final(x)
+        logits = self.lm_head(x)
+
+        return logits
+
+
+def get_model_config(size):
+    """Get model configuration based on size."""
+    configs = {
+        'small': {'d_model': 768, 'd_ff': 3072, 'num_layers': 12, 'num_heads': 12},
+        'medium': {'d_model': 1024, 'd_ff': 4096, 'num_layers': 24, 'num_heads': 16},
+        'large': {'d_model': 1280, 'd_ff': 5120, 'num_layers': 36, 'num_heads': 20},
+        'xl': {'d_model': 1600, 'd_ff': 6400, 'num_layers': 48, 'num_heads': 25},
+        '2.7B': {'d_model': 2560, 'd_ff': 10240, 'num_layers': 32, 'num_heads': 32},
+    }
+    return configs[size]
+
+
 if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = ToyModel(20, 5).to(device)

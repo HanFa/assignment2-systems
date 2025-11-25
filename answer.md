@@ -137,3 +137,40 @@ xl                      N/A            N/A
 
 As the model becomes larger, the speedup of using mix-precision becomes more significant. BF16 and FP16 tends to have
 similar speed-up.
+
+**Problem `memory_profiling`:**
+
+(a) Profiling memory during training with `small` LM gives following usage graph, running with seq_len=128,256,512
+respectively. From the training mem trace, you can easily tell the backward pass starts right after the peek which
+brings in gradients usage.
+
+![benchmark_toy_model_small_BF16_seq_128_training](./trace/playground/benchmark_toy_model_small_BF16_seq_128_training.png)
+
+![benchmark_toy_model_small_BF16_seq_256_training](./trace/playground/benchmark_toy_model_small_BF16_seq_256_training.png)
+
+![benchmark_toy_model_small_BF16_seq_512_training](./trace/playground/benchmark_toy_model_small_BF16_seq_512_training.png)
+
+For inference only, respectively
+
+![benchmark_toy_model_small_BF16_seq_128_inference](./trace/playground/benchmark_toy_model_small_BF16_seq_128_inference.png)
+
+![benchmark_toy_model_small_BF16_seq_256_inference](./trace/playground/benchmark_toy_model_small_BF16_seq_256_inference.png)
+
+![benchmark_toy_model_small_BF16_seq_512_inference](./trace/playground/benchmark_toy_model_small_BF16_seq_512_inference.png)
+
+(b) Peak memory grows roughly linearly with sequence length during the forward pass. The full training step uses several
+times more memory than inference (to store activations, gradients, and optimizer state), and the peak scales more
+steeply with context length (about 4–5× from 128→512).
+
+| Context length | Peak memory – **forward only** | Peak memory – **full training step** (fwd + bwd + opt) |
+|----------------|--------------------------------|--------------------------------------------------------|
+| **128**        | ≈ **1.3 GB**                   | ≈ **4.5 GB**                                           |
+| **256**        | ≈ **1.6 GB**                   | ≈ **9 GB**                                             |
+| **512**        | ≈ **2.7 GB**                   | ≈ **20 GB**                                            |
+
+(c) Yes, mixed precision helps reduce the size of activations if you compare
+`benchmark_toy_model_small_BF16_seq_128_training` vs `benchmark_toy_model_small_FP32_seq_128_training`. The reduction is
+more significant and linear for the inference-mode.
+
+(d) For the `small` model, in theory there are 1.4e8 parameters which gives you 560M mem usage if loaded with
+full-precision.
