@@ -174,3 +174,13 @@ more significant and linear for the inference-mode.
 
 (d) For the `small` model, in theory there are 1.4e8 parameters which gives you 560M mem usage if loaded with
 full-precision.
+
+**Problem `pytorch_attention`:**
+
+Running script [./scripts/run_benchmark_attn.sh](./scripts/run_benchmark_attn.sh) gives following
+benchmarking result [./trace/benchmark_attn.txt](./trace/benchmark_attn.txt) on a H200 machine, the peak reserved memory usage
+is around 65GB.
+
+With JiT, the benchmarking result is at [./trace/benchmark_attn_jit.txt](./trace/benchmark_attn_jit.txt) where we can
+see the 2-3x speedup. 
+

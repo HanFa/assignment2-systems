@@ -1,0 +1,70 @@
+Collecting data...
+2025-12-31 00:07:13 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=16, seq_len=256, num_heads=1, context_len=32768
+2025-12-31 00:07:18 - __main__ - INFO - 100 forward pass duration: 0.032017868012189865
+2025-12-31 00:07:18 - __main__ - INFO - 100 backward pass duration: 0.048362262547016144
+2025-12-31 00:07:18 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=16, seq_len=1024, num_heads=1, context_len=32768
+2025-12-31 00:07:19 - __main__ - INFO - 100 forward pass duration: 0.030114997178316116
+2025-12-31 00:07:19 - __main__ - INFO - 100 backward pass duration: 0.05029788613319397
+2025-12-31 00:07:19 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=16, seq_len=4096, num_heads=1, context_len=32768
+2025-12-31 00:07:20 - __main__ - INFO - 100 forward pass duration: 0.09784230217337608
+2025-12-31 00:07:20 - __main__ - INFO - 100 backward pass duration: 0.210837684571743
+2025-12-31 00:07:20 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=16, seq_len=8192, num_heads=1, context_len=32768
+2025-12-31 00:07:22 - __main__ - INFO - 100 forward pass duration: 0.35903890430927277
+2025-12-31 00:07:25 - __main__ - INFO - 100 backward pass duration: 0.8076900765299797
+2025-12-31 00:07:26 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=16, seq_len=16384, num_heads=1, context_len=32768
+2025-12-31 00:07:28 - __main__ - INFO - 100 forward pass duration: 1.405792225152254
+2025-12-31 00:07:42 - __main__ - INFO - 100 backward pass duration: 3.1452622786164284
+2025-12-31 00:07:43 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=32, seq_len=256, num_heads=1, context_len=32768
+2025-12-31 00:07:44 - __main__ - INFO - 100 forward pass duration: 0.032234735786914825
+2025-12-31 00:07:44 - __main__ - INFO - 100 backward pass duration: 0.04911455884575844
+2025-12-31 00:07:44 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=32, seq_len=1024, num_heads=1, context_len=32768
+2025-12-31 00:07:45 - __main__ - INFO - 100 forward pass duration: 0.032508932054042816
+2025-12-31 00:07:45 - __main__ - INFO - 100 backward pass duration: 0.049154751002788544
+2025-12-31 00:07:45 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=32, seq_len=4096, num_heads=1, context_len=32768
+W1231 00:07:45.448000 10680 .venv/lib/python3.11/site-packages/torch/_dynamo/convert_frame.py:1358] [0/8] torch._dynamo hit config.recompile_limit (8)
+W1231 00:07:45.448000 10680 .venv/lib/python3.11/site-packages/torch/_dynamo/convert_frame.py:1358] [0/8]    function: 'forward' (/root/assignment2-systems/cs336-basics/cs336_basics/model.py:478)
+W1231 00:07:45.448000 10680 .venv/lib/python3.11/site-packages/torch/_dynamo/convert_frame.py:1358] [0/8]    last reason: 0/7: tensor 'x' size mismatch at index 1. expected 1024, actual 4096
+W1231 00:07:45.448000 10680 .venv/lib/python3.11/site-packages/torch/_dynamo/convert_frame.py:1358] [0/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+W1231 00:07:45.448000 10680 .venv/lib/python3.11/site-packages/torch/_dynamo/convert_frame.py:1358] [0/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html
+2025-12-31 00:07:45 - __main__ - INFO - 100 forward pass duration: 0.29445525631308556
+2025-12-31 00:07:46 - __main__ - INFO - 100 backward pass duration: 0.5803441107273102
+2025-12-31 00:07:46 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=32, seq_len=8192, num_heads=1, context_len=32768
+2025-12-31 00:07:47 - __main__ - INFO - 100 forward pass duration: 1.1489619389176369
+2025-12-31 00:07:50 - __main__ - INFO - 100 backward pass duration: 2.2469923570752144
+2025-12-31 00:07:50 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=32, seq_len=16384, num_heads=1, context_len=32768
+2025-12-31 00:07:55 - __main__ - INFO - 100 forward pass duration: 4.426009748131037
+2025-12-31 00:08:04 - __main__ - INFO - 100 backward pass duration: 8.813316337764263
+2025-12-31 00:08:04 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=64, seq_len=256, num_heads=1, context_len=32768
+2025-12-31 00:08:04 - __main__ - INFO - 100 forward pass duration: 0.17244834452867508
+2025-12-31 00:08:05 - __main__ - INFO - 100 backward pass duration: 0.11853589862585068
+2025-12-31 00:08:05 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=64, seq_len=1024, num_heads=1, context_len=32768
+2025-12-31 00:08:05 - __main__ - INFO - 100 forward pass duration: 0.17665207386016846
+2025-12-31 00:08:05 - __main__ - INFO - 100 backward pass duration: 0.12149443104863167
+2025-12-31 00:08:05 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=64, seq_len=4096, num_heads=1, context_len=32768
+2025-12-31 00:08:06 - __main__ - INFO - 100 forward pass duration: 0.33160657808184624
+2025-12-31 00:08:06 - __main__ - INFO - 100 backward pass duration: 0.6408911682665348
+2025-12-31 00:08:06 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=64, seq_len=8192, num_heads=1, context_len=32768
+2025-12-31 00:08:08 - __main__ - INFO - 100 forward pass duration: 1.2903461307287216
+2025-12-31 00:08:10 - __main__ - INFO - 100 backward pass duration: 2.502918191254139
+2025-12-31 00:08:11 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=64, seq_len=16384, num_heads=1, context_len=32768
+2025-12-31 00:08:16 - __main__ - INFO - 100 forward pass duration: 5.0059952810406685
+2025-12-31 00:08:26 - __main__ - INFO - 100 backward pass duration: 9.836045313626528
+2025-12-31 00:08:26 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=128, seq_len=256, num_heads=1, context_len=32768
+2025-12-31 00:08:27 - __main__ - INFO - 100 forward pass duration: 0.15540080145001411
+2025-12-31 00:08:27 - __main__ - INFO - 100 backward pass duration: 0.11508097127079964
+2025-12-31 00:08:27 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=128, seq_len=1024, num_heads=1, context_len=32768
+2025-12-31 00:08:27 - __main__ - INFO - 100 forward pass duration: 0.15663761645555496
+2025-12-31 00:08:27 - __main__ - INFO - 100 backward pass duration: 0.11645937711000443
+2025-12-31 00:08:27 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=128, seq_len=4096, num_heads=1, context_len=32768
+2025-12-31 00:08:28 - __main__ - INFO - 100 forward pass duration: 0.41079143807291985
+2025-12-31 00:08:29 - __main__ - INFO - 100 backward pass duration: 0.780449565500021
+2025-12-31 00:08:29 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=128, seq_len=8192, num_heads=1, context_len=32768
+2025-12-31 00:08:31 - __main__ - INFO - 100 forward pass duration: 1.5638419687747955
+2025-12-31 00:08:34 - __main__ - INFO - 100 backward pass duration: 2.9818542525172234
+2025-12-31 00:08:34 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=128, seq_len=16384, num_heads=1, context_len=32768
+2025-12-31 00:08:40 - __main__ - INFO - 100 forward pass duration: 5.990379698574543
+2025-12-31 00:08:53 - __main__ - INFO - 100 backward pass duration: 11.686845883727074
+Generating '/tmp/nsys-report-4c88.qdstrm'
+[1/1] [========================100%] benchmark_attn.nsys-rep
+Generated:
+	/root/assignment2-systems/trace/benchmark_attn.nsys-rep

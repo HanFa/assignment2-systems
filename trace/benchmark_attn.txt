@@ -1,0 +1,65 @@
+Collecting data...
+2025-12-31 00:19:20 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=16, seq_len=256, num_heads=1, context_len=32768
+2025-12-31 00:19:21 - __main__ - INFO - 100 forward pass duration: 0.13992654904723167, allocated: 0.04GB, reserved: 0.05GB
+2025-12-31 00:19:21 - __main__ - INFO - 100 backward pass duration: 0.14562655240297318, allocated: 0.07GB, reserved: 0.08GB
+2025-12-31 00:19:21 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=16, seq_len=1024, num_heads=1, context_len=32768
+2025-12-31 00:19:21 - __main__ - INFO - 100 forward pass duration: 0.14058942720294, allocated: 0.13GB, reserved: 0.28GB
+2025-12-31 00:19:21 - __main__ - INFO - 100 backward pass duration: 0.12517879158258438, allocated: 0.13GB, reserved: 0.31GB
+2025-12-31 00:19:22 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=16, seq_len=4096, num_heads=1, context_len=32768
+2025-12-31 00:19:22 - __main__ - INFO - 100 forward pass duration: 0.2820785418152809, allocated: 1.09GB, reserved: 3.60GB
+2025-12-31 00:19:22 - __main__ - INFO - 100 backward pass duration: 0.5701371654868126, allocated: 1.09GB, reserved: 3.60GB
+2025-12-31 00:19:23 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=16, seq_len=8192, num_heads=1, context_len=32768
+2025-12-31 00:19:24 - __main__ - INFO - 100 forward pass duration: 1.108114618808031, allocated: 4.15GB, reserved: 14.17GB
+2025-12-31 00:19:26 - __main__ - INFO - 100 backward pass duration: 2.2120321430265903, allocated: 4.15GB, reserved: 14.17GB
+2025-12-31 00:19:26 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=16, seq_len=16384, num_heads=1, context_len=32768
+2025-12-31 00:19:31 - __main__ - INFO - 100 forward pass duration: 4.281017035245895, allocated: 16.36GB, reserved: 56.38GB
+2025-12-31 00:19:40 - __main__ - INFO - 100 backward pass duration: 8.683127105236053, allocated: 16.36GB, reserved: 64.38GB
+2025-12-31 00:19:40 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=32, seq_len=256, num_heads=1, context_len=32768
+2025-12-31 00:19:40 - __main__ - INFO - 100 forward pass duration: 0.13961614295840263, allocated: 0.07GB, reserved: 0.09GB
+2025-12-31 00:19:40 - __main__ - INFO - 100 backward pass duration: 0.12665683403611183, allocated: 0.07GB, reserved: 0.09GB
+2025-12-31 00:19:40 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=32, seq_len=1024, num_heads=1, context_len=32768
+2025-12-31 00:19:41 - __main__ - INFO - 100 forward pass duration: 0.14086299762129784, allocated: 0.14GB, reserved: 0.29GB
+2025-12-31 00:19:41 - __main__ - INFO - 100 backward pass duration: 0.1290484331548214, allocated: 0.14GB, reserved: 0.32GB
+2025-12-31 00:19:41 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=32, seq_len=4096, num_heads=1, context_len=32768
+2025-12-31 00:19:41 - __main__ - INFO - 100 forward pass duration: 0.294166162610054, allocated: 1.11GB, reserved: 3.61GB
+2025-12-31 00:19:42 - __main__ - INFO - 100 backward pass duration: 0.5805323831737041, allocated: 1.11GB, reserved: 4.11GB
+2025-12-31 00:19:42 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=32, seq_len=8192, num_heads=1, context_len=32768
+2025-12-31 00:19:43 - __main__ - INFO - 100 forward pass duration: 1.1490948349237442, allocated: 4.18GB, reserved: 14.19GB
+2025-12-31 00:19:46 - __main__ - INFO - 100 backward pass duration: 2.2468669041991234, allocated: 4.18GB, reserved: 16.19GB
+2025-12-31 00:19:46 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=32, seq_len=16384, num_heads=1, context_len=32768
+2025-12-31 00:19:50 - __main__ - INFO - 100 forward pass duration: 4.428405623883009, allocated: 16.42GB, reserved: 56.45GB
+2025-12-31 00:20:00 - __main__ - INFO - 100 backward pass duration: 8.81399192661047, allocated: 16.42GB, reserved: 64.45GB
+2025-12-31 00:20:00 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=64, seq_len=256, num_heads=1, context_len=32768
+2025-12-31 00:20:00 - __main__ - INFO - 100 forward pass duration: 0.145737212151289, allocated: 0.08GB, reserved: 0.09GB
+2025-12-31 00:20:00 - __main__ - INFO - 100 backward pass duration: 0.11782626062631607, allocated: 0.08GB, reserved: 0.11GB
+2025-12-31 00:20:00 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=64, seq_len=1024, num_heads=1, context_len=32768
+2025-12-31 00:20:00 - __main__ - INFO - 100 forward pass duration: 0.1456056907773018, allocated: 0.15GB, reserved: 0.31GB
+2025-12-31 00:20:01 - __main__ - INFO - 100 backward pass duration: 0.1178940087556839, allocated: 0.15GB, reserved: 0.34GB
+2025-12-31 00:20:01 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=64, seq_len=4096, num_heads=1, context_len=32768
+2025-12-31 00:20:01 - __main__ - INFO - 100 forward pass duration: 0.331552192568779, allocated: 1.14GB, reserved: 3.65GB
+2025-12-31 00:20:02 - __main__ - INFO - 100 backward pass duration: 0.6410389952361584, allocated: 1.14GB, reserved: 4.15GB
+2025-12-31 00:20:02 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=64, seq_len=8192, num_heads=1, context_len=32768
+2025-12-31 00:20:03 - __main__ - INFO - 100 forward pass duration: 1.2903308309614658, allocated: 4.23GB, reserved: 14.26GB
+2025-12-31 00:20:06 - __main__ - INFO - 100 backward pass duration: 2.503290720283985, allocated: 4.23GB, reserved: 16.26GB
+2025-12-31 00:20:06 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=64, seq_len=16384, num_heads=1, context_len=32768
+2025-12-31 00:20:11 - __main__ - INFO - 100 forward pass duration: 5.004251126199961, allocated: 16.52GB, reserved: 56.55GB
+2025-12-31 00:20:22 - __main__ - INFO - 100 backward pass duration: 9.835474293678999, allocated: 16.52GB, reserved: 64.55GB
+2025-12-31 00:20:22 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=128, seq_len=256, num_heads=1, context_len=32768
+2025-12-31 00:20:22 - __main__ - INFO - 100 forward pass duration: 0.14165372028946877, allocated: 0.09GB, reserved: 0.11GB
+2025-12-31 00:20:22 - __main__ - INFO - 100 backward pass duration: 0.12687134742736816, allocated: 0.09GB, reserved: 0.11GB
+2025-12-31 00:20:22 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=128, seq_len=1024, num_heads=1, context_len=32768
+2025-12-31 00:20:22 - __main__ - INFO - 100 forward pass duration: 0.14310825616121292, allocated: 0.17GB, reserved: 0.34GB
+2025-12-31 00:20:23 - __main__ - INFO - 100 backward pass duration: 0.12546595185995102, allocated: 0.17GB, reserved: 0.37GB
+2025-12-31 00:20:23 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=128, seq_len=4096, num_heads=1, context_len=32768
+2025-12-31 00:20:23 - __main__ - INFO - 100 forward pass duration: 0.4108942002058029, allocated: 1.19GB, reserved: 3.71GB
+2025-12-31 00:20:24 - __main__ - INFO - 100 backward pass duration: 0.7808636277914047, allocated: 1.19GB, reserved: 4.21GB
+2025-12-31 00:20:24 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=128, seq_len=8192, num_heads=1, context_len=32768
+2025-12-31 00:20:26 - __main__ - INFO - 100 forward pass duration: 1.563895110040903, allocated: 4.34GB, reserved: 14.40GB
+2025-12-31 00:20:29 - __main__ - INFO - 100 backward pass duration: 2.981790143996477, allocated: 4.34GB, reserved: 16.40GB
+2025-12-31 00:20:29 - __main__ - INFO - Benchmarking with config: batch_size=8, d_model=128, seq_len=16384, num_heads=1, context_len=32768
+2025-12-31 00:20:35 - __main__ - INFO - 100 forward pass duration: 5.990007687360048, allocated: 16.72GB, reserved: 56.79GB
+2025-12-31 00:20:48 - __main__ - INFO - 100 backward pass duration: 11.685029823333025, allocated: 16.72GB, reserved: 64.79GB
+Generating '/tmp/nsys-report-9e02.qdstrm'
+[1/1] [========================100%] benchmark_attn.nsys-rep
+Generated:
+	/root/assignment2-systems/trace/benchmark_attn.nsys-rep
