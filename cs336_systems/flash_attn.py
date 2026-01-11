@@ -224,12 +224,77 @@ class PytorchFlashAttnFunc(torch.autograd.Function):
             l[..., start_b_q: end_b_q] = m_i + torch.log(l_i)
 
         ctx.save_for_backward(o, l, q, k, v)
+        ctx.leading_shape = leading_shape
+        ctx.is_causal = is_causal
 
         return o.view(*leading_shape, q_seq_len, d_model)
 
     @staticmethod
-    def backward(ctx: Any, *grad_outputs: Any) -> Any:
-        raise NotImplementedError("not implemented")
+    def backward(ctx: Any, grad_outputs: torch.Tensor) -> Any:
+
+        # grad_outputs of shape (..., q_seq_len, d_model)
+        # o of shape (..., q_seq_len, d_model)
+        # l of shape (..., q_seq_len)
+        # q of shape (..., q_seq_len, d_model)
+        # k of shape (..., k_seq_len, d_model)
+        # v of shape (..., k_seq_len, d_model)
+        o, l, q, k, v = ctx.saved_tensors
+        leading_shape = ctx.leading_shape
+
+        grad_outputs = rearrange(grad_outputs, "... q_seq_len d_model -> (...) q_seq_len d_model")
+
+        d = torch.sum(grad_outputs * o, dim=-1)  # (..., q_seq_len)
+        q_seq_len, d_model, k_seq_len = q.shape[-2], q.shape[-1], k.shape[-2]
+        b_q, b_k = 16, 16  # tile size
+        t_q, t_k = math.ceil(q_seq_len / b_q), math.ceil(k_seq_len / b_k)  # number of query, key tiles
+
+        # output grad tensors
+        grad_q = torch.zeros_like(q)
+        grad_k = torch.zeros_like(k)
+        grad_v = torch.zeros_like(v)
+
+        for j in range(0, t_k):
+            start_b_k, end_b_k = j * b_k, min(k_seq_len, (j + 1) * b_k)
+
+            k_j = k[..., start_b_k: end_b_k, :]  # (..., b_k, d_model)
+            v_j = v[..., start_b_k: end_b_k, :]  # (..., b_k, d_model)
+
+            grad_k_j = torch.zeros_like(k_j)
+            grad_v_j = torch.zeros_like(v_j)
+
+            k_indices = torch.arange(start_b_k, end_b_k, device=q.device)
+
+            for i in range(0, t_q):
+                start_b_q, end_b_q = i * b_q, min((i + 1) * b_q, q_seq_len)
+                d_i = d[..., start_b_q: end_b_q]  # b_q
+                q_i = q[..., start_b_q: end_b_q, :]  # b_q, d_model
+                grad_o_i = grad_outputs[..., start_b_q: end_b_q, :]  # b_q, d_model
+                l_i = l[..., start_b_q: end_b_q]  # b_q
+
+                s_ij = einsum(q_i, k_j, "... b_q d_model, ... b_k d_model -> ... b_q b_k") / math.sqrt(d_model)
+
+                if ctx.is_causal:
+                    q_indices = torch.arange(start_b_q, end_b_q, device=q.device)
+                    s_ij = torch.where(q_indices[:, None] >= k_indices[None, :], s_ij, -float('inf'))
+
+                p_ij = torch.exp(s_ij - l_i.unsqueeze(dim=-1))  # (..., b_q, b_k) - (..., b_q, 1) -> (... b_q, b_k)
+
+                grad_v_j += einsum(p_ij, grad_o_i, "... b_q b_k, ... b_q d_model -> ... b_k d_model")
+                grad_p_ij = einsum(grad_o_i, v_j, "... b_q d_model, ... b_k d_model -> ... b_q b_k")
+                grad_s_ij = p_ij * (grad_p_ij - d_i.unsqueeze(dim=-1)) / math.sqrt(d_model)  # (... b_q b_k)
+
+                grad_q[..., start_b_q: end_b_q, :] += einsum(grad_s_ij, k_j,
+                                                             "... b_q b_k, ... b_k d_model -> ... b_q d_model")  # update grad_q across tiles
+                grad_k_j += einsum(grad_s_ij, q_i,
+                                   "... b_q b_k, ... b_q d_model -> ... b_k d_model")  # (... b_k d_model)
+
+            # write back grad results
+            grad_k[..., start_b_k: end_b_k, :] = grad_k_j
+            grad_v[..., start_b_k: end_b_k, :] = grad_v_j
+
+        return (grad_q.view(*leading_shape, q_seq_len, d_model),
+                grad_k.view(*leading_shape, k_seq_len, d_model),
+                grad_v.view(*leading_shape, k_seq_len, d_model), None)
 
 
 def native_self_attn(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, is_causal: bool = False) -> torch.Tensor:
@@ -237,7 +302,8 @@ def native_self_attn(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, is_causa
     s = einsum(q, k, "... q_seq_len d_model, ... k_seq_len d_model -> ... q_seq_len k_seq_len") / math.sqrt(d_model)
 
     if is_causal:
-        s = torch.where(torch.tril(torch.ones(s.shape[-2:], device=q.device, dtype=torch.bool), diagonal=0), s, -float('inf'))
+        s = torch.where(torch.tril(torch.ones(s.shape[-2:], device=q.device, dtype=torch.bool), diagonal=0), s,
+                        -float('inf'))
 
     p = torch.softmax(s, dim=-1)
     o = einsum(p, v, "... q_seq_len k_seq_len, ... k_seq_len d_model -> ... q_seq_len d_model")
@@ -247,12 +313,16 @@ def native_self_attn(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, is_causa
 if __name__ == '__main__':
     torch.manual_seed(0)
 
-    q = torch.rand(size=(64, 3, 17, 256), device='cuda')
-    k = torch.rand(size=(64, 3, 23, 256), device='cuda')
-    v = torch.rand(size=(64, 3, 23, 256), device='cuda')
+    q = torch.rand(size=(64, 3, 17, 256), device='cuda', requires_grad=True)
+    k = torch.rand(size=(64, 3, 23, 256), device='cuda', requires_grad=True)
+    v = torch.rand(size=(64, 3, 23, 256), device='cuda', requires_grad=True)
+
+    q_flash = q.clone().detach().requires_grad_(True)
+    k_flash = k.clone().detach().requires_grad_(True)
+    v_flash = v.clone().detach().requires_grad_(True)
 
     o_native_attn = native_self_attn(q, k, v, True)
-    o_flash_attn = PytorchFlashAttnFunc.apply(q, k, v, True)
+    o_flash_attn = PytorchFlashAttnFunc.apply(q_flash, k_flash, v_flash, True)
     o_triton_attn = TritonFlashAttnFunc.apply(q, k, v, True)
 
     print(f'The maximum difference between native and pytorch flash attention is '
@@ -260,3 +330,11 @@ if __name__ == '__main__':
 
     print(f'The maximum difference between native and triton flash attention is '
           f'{torch.max(torch.abs(o_native_attn - o_triton_attn))}')
+
+
+    l_native = o_native_attn.sum()
+    l_flash = o_flash_attn.sum()
+
+    l_native.backward(), l_flash.backward()
+    print(f'The maximum difference between native and pytorch flash attention grad_q is '
+          f'{torch.max(torch.abs(q.grad - q_flash.grad))}')
