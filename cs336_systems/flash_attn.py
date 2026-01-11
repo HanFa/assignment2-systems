@@ -19,6 +19,7 @@ def flash_fwd_kernel(
         stride_lb, stride_lq,
         N_QUERIES, N_KEYS,
         scale,
+        causal,
         D: tl.constexpr,
         Q_TILE_SIZE: tl.constexpr,
         K_TILE_SIZE: tl.constexpr
@@ -81,15 +82,23 @@ def flash_fwd_kernel(
     q_i = tl.load(q_block_ptr, boundary_check=(0, 1), padding_option='zero')
 
     k_base_offset = tl.arange(0, K_TILE_SIZE)
+    q_indices = query_tile_index * Q_TILE_SIZE + tl.arange(0, Q_TILE_SIZE)
+
     t_k = tl.cdiv(N_KEYS, K_TILE_SIZE)
     for j in range(t_k):
         k_j = tl.load(k_block_ptr, boundary_check=(0, 1), padding_option='zero')
         v_j = tl.load(v_block_ptr, boundary_check=(0, 1), padding_option='zero')
 
         s_ij = tl.dot(q_i, tl.trans(k_j), allow_tf32=False) * scale
-        # mask s_ij
-        mask = (j * K_TILE_SIZE + k_base_offset) < N_KEYS  # (K_TILE_SIZE,)
+        # mask s_ij because of the k boundary
+        k_indices = j * K_TILE_SIZE + k_base_offset
+        mask = k_indices < N_KEYS  # (K_TILE_SIZE,)
         s_ij = tl.where(mask[None, :], s_ij, -float('inf'))
+
+        # mask s_ij if causal
+        if causal:
+            mask_causal = q_indices[:, None] >= k_indices[None, :]
+            s_ij = tl.where(mask_causal, s_ij, -float('inf'))
 
         new_m_i = tl.maximum(m_i, tl.max(s_ij, axis=-1, keep_dims=False))
 
@@ -135,6 +144,7 @@ class TritonFlashAttnFunc(torch.autograd.Function):
             l.stride(0), l.stride(1),
             q_seq_len, k_seq_len,
             scale,
+            causal=is_causal,
             D=d_model,
             Q_TILE_SIZE=b_q,
             K_TILE_SIZE=b_k
@@ -175,6 +185,7 @@ class PytorchFlashAttnFunc(torch.autograd.Function):
         for i in range(0, t_q):
 
             start_b_q, end_b_q = i * b_q, min((i + 1) * b_q, q_seq_len)
+            q_indices = torch.arange(start_b_q, end_b_q, device=q.device)
 
             q_i = q[..., start_b_q: end_b_q, :]  # b_q, d_model
 
@@ -192,6 +203,10 @@ class PytorchFlashAttnFunc(torch.autograd.Function):
                 v_j = v[..., start_b_k: end_b_k, :]  # (..., b_k, d_model)
 
                 s_ij = einsum(q_i, k_j, "... b_q d_model, ... b_k d_model -> ... b_q b_k") / math.sqrt(d_model)
+
+                if is_causal:
+                    k_indices = torch.arange(start_b_k, end_b_k, device=q.device)
+                    s_ij = torch.where(q_indices[:, None] >= k_indices[None, :], s_ij, -float('inf'))
 
                 new_m_i = torch.maximum(m_i, torch.max(s_ij, dim=-1, keepdim=False).values)  # (..., b_q, )
 
@@ -217,9 +232,13 @@ class PytorchFlashAttnFunc(torch.autograd.Function):
         raise NotImplementedError("not implemented")
 
 
-def native_self_attn(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
+def native_self_attn(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, is_causal: bool = False) -> torch.Tensor:
     d_model = q.shape[-1]
     s = einsum(q, k, "... q_seq_len d_model, ... k_seq_len d_model -> ... q_seq_len k_seq_len") / math.sqrt(d_model)
+
+    if is_causal:
+        s = torch.where(torch.tril(torch.ones(s.shape[-2:], device=q.device, dtype=torch.bool), diagonal=0), s, -float('inf'))
+
     p = torch.softmax(s, dim=-1)
     o = einsum(p, v, "... q_seq_len k_seq_len, ... k_seq_len d_model -> ... q_seq_len d_model")
     return o
@@ -232,9 +251,9 @@ if __name__ == '__main__':
     k = torch.rand(size=(64, 3, 23, 256), device='cuda')
     v = torch.rand(size=(64, 3, 23, 256), device='cuda')
 
-    o_native_attn = native_self_attn(q, k, v)
-    o_flash_attn = PytorchFlashAttnFunc.apply(q, k, v)
-    o_triton_attn = TritonFlashAttnFunc.apply(q, k, v)
+    o_native_attn = native_self_attn(q, k, v, True)
+    o_flash_attn = PytorchFlashAttnFunc.apply(q, k, v, True)
+    o_triton_attn = TritonFlashAttnFunc.apply(q, k, v, True)
 
     print(f'The maximum difference between native and pytorch flash attention is '
           f'{torch.max(torch.abs(o_native_attn - o_flash_attn))}')
