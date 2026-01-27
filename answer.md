@@ -178,9 +178,34 @@ full-precision.
 **Problem `pytorch_attention`:**
 
 Running script [./scripts/run_benchmark_attn.sh](./scripts/run_benchmark_attn.sh) gives following
-benchmarking result [./trace/benchmark_attn.txt](./trace/benchmark_attn.txt) on a H200 machine, the peak reserved memory usage
+benchmarking result [./trace/benchmark_attn.txt](./trace/benchmark_attn.txt) on a H200 machine, the peak reserved memory
+usage
 is around 65GB.
 
 With JiT, the benchmarking result is at [./trace/benchmark_attn_jit.txt](./trace/benchmark_attn_jit.txt) where we can
-see the 2-3x speedup. 
+see the 2-3x speedup.
+
+**Problem `distributed_communication_single_node`:**
+
+I have written a benchmarking and plotting script
+at [./cs336_systems/playground/distributed/all_reduce_benchmark.py](./cs336_systems/playground/distributed/all_reduce_benchmark.py).
+Running on an instance w/ 6 RTX 5090s yields following results.
+
+| Duration vs Data Size                                                        | Duration vs Num Processes                                                    | Backend Comparison                                                                       |
+|------------------------------------------------------------------------------|------------------------------------------------------------------------------|------------------------------------------------------------------------------------------|
+| ![by_data_size](./images/playground/distributed/all_reduce_by_data_size.png) | ![by_num_procs](./images/playground/distributed/all_reduce_by_num_procs.png) | ![backend_comparison](./images/playground/distributed/all_reduce_backend_comparison.png) |
+
+Findings:
+
+* NCCL+CUDA is significantly faster than Gloo+CPU
+* Duration scales roughly linearly with data size (both backends)
+* More processes increases duration, but modestly
+* NCCL has higher fixed overhead for small messages
+
+
+
+
+
+
+
 
