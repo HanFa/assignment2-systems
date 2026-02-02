@@ -202,8 +202,19 @@ Findings:
 * More processes increases duration, but modestly
 * NCCL has higher fixed overhead for small messages
 
+**Problem `naive_ddp`:** A script
+at [./cs336_systems/playground/distributed/naive_ddp.py](./cs336_systems/playground/distributed/naive_ddp.py) to compare
+native DDP with single-process training.
 
+**Problem `naive_ddp_benchmarking`:** A script
+at [./cs336_systems/playground/distributed/naive_ddp_benchmarking.py](./cs336_systems/playground/distributed/naive_ddp_benchmarking.py)
+gives following [trace](./trace/playground/distributed/naive_ddp_benchmarking/trace.nsys-rep).
 
+* Total Time per Step: 2.543 seconds
+* Time Spent Communicating (All-Reduce): 1.048 seconds
+* We are spending approximately 41.2% of your total training time just communicating gradients between GPUs.
+
+![trace screenshot](./trace/playground/distributed/naive_ddp_benchmarking/trace.png)
 
 
 
