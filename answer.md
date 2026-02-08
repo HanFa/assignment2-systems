@@ -202,10 +202,28 @@ Findings:
 * More processes increases duration, but modestly
 * NCCL has higher fixed overhead for small messages
 
+**Problem `naive_ddp`:** A script
+at [./cs336_systems/playground/distributed/naive_ddp.py](./cs336_systems/playground/distributed/naive_ddp.py) to compare
+native DDP with single-process training.
 
+**Problem `naive_ddp_benchmarking`:** A script
+at [./cs336_systems/playground/distributed/naive_ddp_benchmarking.py](./cs336_systems/playground/distributed/naive_ddp_benchmarking.py)
+gives following [trace](./trace/playground/distributed/naive_ddp_benchmarking/trace.nsys-rep).
 
+* Total Time per Step: 2.543 seconds
+* Time Spent Communicating (All-Reduce): 1.048 seconds
+* We are spending approximately 41.2% of your total training time just communicating gradients between GPUs.
 
+![trace screenshot](./trace/playground/distributed/naive_ddp_benchmarking/trace.png)
 
+**Problem `minimal_ddp_flat_benchmarking`:**
 
+Comparing the Nsys traces of the unflattened vs. flattened gradient communication:
 
+|                   Unflattened Gradients                   |                  Flattened Gradients                  |
+|:---------------------------------------------------------:|:-----------------------------------------------------:|
+| ![unflattened](./images/playground/flatten/unflatten.png) | ![flattened](./images/playground/flatten/flatten.png) |
 
+* There is no obvious speedup (Time of `all-reduce` unflatten 0.982s vs flatten 1.002s) because of the application is
+  memory-bounded instead of latency bounded. I was using a RunPod host w/ 2 A40 GPUs with `NCCL_P2P_DISABLE` which gives
+  us much smaller bandwidth compared to NVLink.
