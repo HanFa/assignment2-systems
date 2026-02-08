@@ -8,6 +8,12 @@ Usage:
     # With nsys profiling
     nsys profile -c cudaProfilerApi -o trace/playground/distributed/naive_ddp_benchmarking/trace python -m cs336_systems.playground.distributed.naive_ddp_benchmarking
 
+    # With nsys profiling + unflattened all-reduced tensors
+    nsys profile -c cudaProfilerApi -o trace/playground/distributed/flatten/trace_unflattened python -m cs336_systems.playground.distributed.naive_ddp_benchmarking
+
+    # With nsys profiling + (un)flatten all-reduced tensors
+    nsys profile -c cudaProfilerApi -o trace/playground/distributed/flatten/trace_flatten python -m cs336_systems.playground.distributed.naive_ddp_benchmarking --flatten
+
     # Custom config
     python -m cs336_systems.playground.distributed.naive_ddp_benchmarking \
         --model-size xl --batch-size 4 --seq-length 512 --num-gpus 4
@@ -43,7 +49,22 @@ def cleanup():
     dist.destroy_process_group()
 
 
-def native_ddp_worker(rank, world_size, config, num_warmup, num_iterations, batch_size, seq_length, vocab_size):
+def all_reduce_grads(model, world_size, flatten):
+    if flatten:
+        grads = [p.grad.data for p in model.parameters() if p.grad is not None]
+        flat_grads = torch._utils._flatten_dense_tensors(grads)
+        dist.all_reduce(flat_grads, op=dist.ReduceOp.SUM)
+        flat_grads /= world_size
+        for grad, unflattened in zip(grads, torch._utils._unflatten_dense_tensors(flat_grads, grads)):
+            grad.copy_(unflattened)
+    else:
+        for param in model.parameters():
+            if param.grad is not None:
+                dist.all_reduce(param.grad.data, op=dist.ReduceOp.SUM)
+                param.grad.data /= world_size
+
+
+def native_ddp_worker(rank, world_size, config, num_warmup, num_iterations, batch_size, seq_length, vocab_size, flatten):
     # Configure logging in worker process (spawned processes don't inherit logging config)
     logging.basicConfig(
         level=logging.INFO,
@@ -85,10 +106,7 @@ def native_ddp_worker(rank, world_size, config, num_warmup, num_iterations, batc
         loss = criterion(logits.view(-1, logits.size(-1)), targets.view(-1))
         loss.backward()
 
-        for param in model.parameters():
-            if param.grad is not None:
-                dist.all_reduce(param.grad.data, op=dist.ReduceOp.SUM)
-                param.grad.data /= world_size
+        all_reduce_grads(model, world_size, flatten)
 
         optimizer.step()
 
@@ -121,10 +139,7 @@ def native_ddp_worker(rank, world_size, config, num_warmup, num_iterations, batc
         nvtx.range_pop()
 
         nvtx.range_push("all_reduce")
-        for param in model.parameters():
-            if param.grad is not None:
-                dist.all_reduce(param.grad.data, op=dist.ReduceOp.SUM)
-                param.grad.data /= world_size
+        all_reduce_grads(model, world_size, flatten)
         torch.cuda.synchronize()
         nvtx.range_pop()
 
@@ -167,6 +182,8 @@ def main():
                         help='Vocabulary size (default: 50000)')
     parser.add_argument('--num-gpus', type=int, default=None,
                         help='Number of GPUs to use (default: all available)')
+    parser.add_argument('--flatten', action='store_true',
+                        help='Use torch._utils._flatten_dense_tensors for all-reduce')
 
     args = parser.parse_args()
 
@@ -190,7 +207,8 @@ def main():
             args.num_iterations,
             args.batch_size,
             args.seq_length,
-            args.vocab_size
+            args.vocab_size,
+            args.flatten
         ),
         nprocs=num_gpus,
         join=True
