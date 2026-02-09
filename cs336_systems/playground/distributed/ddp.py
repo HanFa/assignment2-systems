@@ -8,6 +8,9 @@ Usage:
     # With nsys profiling
     nsys profile -c cudaProfilerApi -o trace/playground/distributed/ddp/trace python -m cs336_systems.playground.distributed.ddp
 
+    # With bucketed all-reduce (25 MB buckets)
+    nsys profile -c cudaProfilerApi -o trace/playground/distributed/ddp_bucketed/trace_bucket_25 python -m cs336_systems.playground.distributed.ddp --bucket-size-mb 25
+
     # Custom config
     python -m cs336_systems.playground.distributed.ddp \
         --model-size xl --batch-size 4 --seq-length 512 --num-gpus 4
@@ -43,6 +46,10 @@ def cleanup():
     dist.destroy_process_group()
 
 
+def _get_mb_size(tensor: torch.Tensor) -> float:
+    return tensor.nelement() * tensor.element_size() / (1024 * 1024)
+
+
 class DDPWrapper(torch.nn.Module):
 
     def __init__(self, module: torch.nn.Module):
@@ -68,6 +75,56 @@ class DDPWrapper(torch.nn.Module):
         for handle in self.all_reduce_handles:
             handle.wait()
         self.all_reduce_handles.clear()
+
+
+class DDPBucketedWrapper(torch.nn.Module):
+
+    def __init__(self, module: torch.nn.Module, bucket_size_mb: float):
+        super().__init__()
+        self.module = module
+        self.bucket_size_mb = bucket_size_mb
+
+        self.cur_bucket_size = 0
+        self.cur_bucket = []
+
+        self.all_reduce_handles = []
+
+        for param in self.module.parameters():
+            with torch.no_grad():
+                dist.broadcast(param, src=0)
+            if param.requires_grad:
+                param.register_post_accumulate_grad_hook(self._post_accumulate_grad_hook)
+
+    def _send_bucket(self):
+        grads = self.cur_bucket
+        flat_grads = torch._utils._flatten_dense_tensors(grads)
+        handle = dist.all_reduce(flat_grads, op=dist.ReduceOp.AVG, async_op=True)
+        self.all_reduce_handles.append((handle, flat_grads, grads))
+        self.cur_bucket = []
+        self.cur_bucket_size = 0
+
+    def _post_accumulate_grad_hook(self, param: torch.nn.Parameter):
+        grad = param.grad.data
+
+        self.cur_bucket.append(grad)
+        self.cur_bucket_size += _get_mb_size(grad)
+
+        if self.cur_bucket_size >= self.bucket_size_mb:
+            self._send_bucket()
+
+    def forward(self, *inputs, **kwargs):
+        return self.module(*inputs, **kwargs)
+
+    def finish_gradient_synchronization(self):
+        if self.cur_bucket:
+            self._send_bucket()
+        for handle, flat_grads, grads in self.all_reduce_handles:
+            handle.wait()
+            for grad, unflattened in zip(grads, torch._utils._unflatten_dense_tensors(flat_grads, grads)):
+                grad.copy_(unflattened)
+        self.all_reduce_handles.clear()
+        self.cur_bucket = []
+        self.cur_bucket_size = 0
 
 
 def train_step(ddp_model, optimizer, criterion, inputs, targets, trace=False):
@@ -98,7 +155,7 @@ def train_step(ddp_model, optimizer, criterion, inputs, targets, trace=False):
     return loss
 
 
-def ddp_worker(rank, world_size, config, num_warmup, num_iterations, batch_size, seq_length, vocab_size):
+def ddp_worker(rank, world_size, config, num_warmup, num_iterations, batch_size, seq_length, vocab_size, bucket_size_mb):
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
@@ -118,7 +175,10 @@ def ddp_worker(rank, world_size, config, num_warmup, num_iterations, batch_size,
         vocab_size=vocab_size
     ).to(device)
 
-    ddp_model = DDPWrapper(model)
+    if bucket_size_mb > 0:
+        ddp_model = DDPBucketedWrapper(model, bucket_size_mb=bucket_size_mb)
+    else:
+        ddp_model = DDPWrapper(model)
     optimizer = optim.AdamW(model.parameters(), lr=1e-4)
     criterion = nn.CrossEntropyLoss()
 
@@ -185,6 +245,8 @@ def main():
                         help='Vocabulary size (default: 50000)')
     parser.add_argument('--num-gpus', type=int, default=None,
                         help='Number of GPUs to use (default: all available)')
+    parser.add_argument('--bucket-size-mb', type=float, default=0,
+                        help='Bucket size in MB for bucketed all-reduce (default: 0, no bucketing)')
 
     args = parser.parse_args()
 
@@ -209,6 +271,7 @@ def main():
             args.batch_size,
             args.seq_length,
             args.vocab_size,
+            args.bucket_size_mb,
         ),
         nprocs=num_gpus,
         join=True

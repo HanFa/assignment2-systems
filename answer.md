@@ -228,29 +228,74 @@ Comparing the Nsys traces of the unflattened vs. flattened gradient communicatio
   memory-bounded instead of latency bounded. I was using a RunPod host w/ 2 A40 GPUs with `NCCL_P2P_DISABLE` which gives
   us much smaller bandwidth compared to NVLink.
 
-
 **Problem `ddp_overlap_individual_parameters_benchmarking`:** A script
 at [./cs336_systems/playground/distributed/ddp.py](./cs336_systems/playground/distributed/ddp.py) benchmarks DDP with
 communication overlap using async all-reduce in `post_accumulate_grad_hook`.
 
 Comparing the Nsys traces of naive DDP (no overlap) vs. overlapped DDP:
 
-|                          Naive DDP (no overlap)                           |                     Overlapped DDP                      |
-|:-------------------------------------------------------------------------:|:-------------------------------------------------------:|
-| ![naive](./trace/playground/distributed/naive_ddp_benchmarking/trace.png) | ![overlapped](./images/playground/ddp/trace.png)        |
+|                          Naive DDP (no overlap)                           |                  Overlapped DDP                  |
+|:-------------------------------------------------------------------------:|:------------------------------------------------:|
+| ![naive](./trace/playground/distributed/naive_ddp_benchmarking/trace.png) | ![overlapped](./images/playground/ddp/trace.png) |
 
-|                                         | Naive DDP (no overlap) | Overlapped DDP |
-|-----------------------------------------|------------------------|----------------|
-| **Total step time**                     | ~2.543 s               | ~1.619 s       |
-| **Forward**                             | ~644 ms                | ~644 ms        |
-| **Backward**                            | ~809 ms                | —              |
-| **All-reduce**                          | ~1.049 s               | —              |
-| **Backward+All-reduce (overlapped)**    | —                      | ~1.340 s       |
-| **Optimizer step**                      | ~41 ms                 | ~241 ms        |
-| **Speedup**                             | 1.0x                   | **~1.57x**     |
+|                                      | Naive DDP (no overlap) | Overlapped DDP |
+|--------------------------------------|------------------------|----------------|
+| **Total step time**                  | ~2.543 s               | ~1.619 s       |
+| **Forward**                          | ~644 ms                | ~644 ms        |
+| **Backward**                         | ~809 ms                | —              |
+| **All-reduce**                       | ~1.049 s               | —              |
+| **Backward+All-reduce (overlapped)** | —                      | ~1.340 s       |
+| **Optimizer step**                   | ~41 ms                 | ~241 ms        |
+| **Speedup**                          | 1.0x                   | **~1.57x**     |
 
 * With overlap, all-reduce runs concurrently with backward via `post_accumulate_grad_hook` + `async_op=True`.
-* The combined backward+all_reduce phase (1.340 s) is shorter than the sum of the separate backward (809 ms) + all_reduce
+* The combined backward+all_reduce phase (1.340 s) is shorter than the sum of the separate backward (809 ms) +
+  all_reduce
   (1.049 s = 1.858 s) phases, saving ~500 ms per step.
 
+**Problem `ddp_bucketed_benchmarking`:**
+
+(a) Benchmarking the bucketed DDP implementation (1 node, 2 GPUs, XL model) with varying maximum bucket sizes
+gives the following results (measured from nsys NVTX annotations):
+
+| Bucket Size (MB) | Iteration Time (s) | Backward+All-Reduce (s) | Optimizer Step (ms) |
+|------------------|--------------------|-------------------------|---------------------|
+| 0 (per-param)    | ~1.616             | ~1.339                  | ~241                |
+| 1                | ~1.820             | ~1.347                  | ~241                |
+| 10               | ~1.605             | ~1.228                  | ~241                |
+| 100              | ~1.606             | ~1.332                  | ~241                |
+| 1000             | ~1.672             | ~1.398                  | ~241                |
+
+| ![bucket_0](./images/playground/ddp_bucketed/trace_bucket_0.png) | ![bucket_1](./images/playground/ddp_bucketed/trace_bucket_1.png) |
+|:----------------------------------------------------------------:|:----------------------------------------------------------------:|
+|                  Bucket size = 0 MB (per-param)                  |                        Bucket size = 1 MB                        |
+
+| ![bucket_10](./images/playground/ddp_bucketed/trace_bucket_10.png) | ![bucket_100](./images/playground/ddp_bucketed/trace_bucket_100.png) | ![bucket_1000](./images/playground/ddp_bucketed/trace_bucket_1000.png) |
+|:------------------------------------------------------------------:|:--------------------------------------------------------------------:|:----------------------------------------------------------------------:|
+|                        Bucket size = 10 MB                         |                         Bucket size = 100 MB                         |                         Bucket size = 1000 MB                          |
+
+Compared to the previous overlapped DDP experiment without bucketing (~1.619 s per step), the 10 MB and 100 MB
+bucket sizes yield a slight improvement (~1.605 s), while 1 MB buckets are significantly worse (~1.82 s) and
+1000 MB is also worse (~1.672 s). The results mostly align with expectations: moderate bucket sizes balance
+communication efficiency (fewer NCCL calls with better bandwidth utilization) against overlap opportunity
+(smaller buckets can start communicating earlier during backward). The 1 MB case is surprisingly the worst
+performer — with the XL model (~5 GB parameters), it creates ~5000 tiny buckets, each incurring tensor
+flatten/unflatten overhead plus per-call NCCL launch overhead that accumulates substantially. The 1000 MB case
+effectively puts all gradients in 5 buckets, so all-reduce only starts after the first 20% backward pass
+completes, causing latency wall. Note that we are running with `NCCL_P2P_DISABLE`, making the application
+memory-bound rather than latency-bound, which reduces the benefit of bucketing (fewer, larger messages) since
+bandwidth utilization is already high even with small messages.
+
+(b) Let $s$ = total parameter size (bytes), $w$ = all-reduce bandwidth (bytes/s), $o$ = per-call overhead (s),
+$n_b$ = number of buckets. Each bucket has size $s/n_b$, with communication time $\frac{s}{n_b \cdot w} + o$.
+The compute time per bucket is $\frac{s}{n_b \cdot w}$ (equal to the data transfer portion by assumption). Since
+communication time exceeds compute time by $o$ per bucket, the NCCL stream falls behind by $o$ each step of
+the pipeline. The last bucket's communication extends entirely past the backward pass. The DDP communication
+overhead (additional time after backward) is:
+
+$$\text{Overhead}(n_b) = \frac{s}{n_b \cdot w} + n_b \cdot o$$
+
+The optimal bucket size is therefore:
+
+$$b^* = \frac{s}{n_b^*} = \sqrt{s \cdot w \cdot o}$$
 
