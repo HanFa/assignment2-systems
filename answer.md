@@ -227,3 +227,30 @@ Comparing the Nsys traces of the unflattened vs. flattened gradient communicatio
 * There is no obvious speedup (Time of `all-reduce` unflatten 0.982s vs flatten 1.002s) because of the application is
   memory-bounded instead of latency bounded. I was using a RunPod host w/ 2 A40 GPUs with `NCCL_P2P_DISABLE` which gives
   us much smaller bandwidth compared to NVLink.
+
+
+**Problem `ddp_overlap_individual_parameters_benchmarking`:** A script
+at [./cs336_systems/playground/distributed/ddp.py](./cs336_systems/playground/distributed/ddp.py) benchmarks DDP with
+communication overlap using async all-reduce in `post_accumulate_grad_hook`.
+
+Comparing the Nsys traces of naive DDP (no overlap) vs. overlapped DDP:
+
+|                          Naive DDP (no overlap)                           |                     Overlapped DDP                      |
+|:-------------------------------------------------------------------------:|:-------------------------------------------------------:|
+| ![naive](./trace/playground/distributed/naive_ddp_benchmarking/trace.png) | ![overlapped](./images/playground/ddp/trace.png)        |
+
+|                                         | Naive DDP (no overlap) | Overlapped DDP |
+|-----------------------------------------|------------------------|----------------|
+| **Total step time**                     | ~2.543 s               | ~1.619 s       |
+| **Forward**                             | ~644 ms                | ~644 ms        |
+| **Backward**                            | ~809 ms                | —              |
+| **All-reduce**                          | ~1.049 s               | —              |
+| **Backward+All-reduce (overlapped)**    | —                      | ~1.340 s       |
+| **Optimizer step**                      | ~41 ms                 | ~241 ms        |
+| **Speedup**                             | 1.0x                   | **~1.57x**     |
+
+* With overlap, all-reduce runs concurrently with backward via `post_accumulate_grad_hook` + `async_op=True`.
+* The combined backward+all_reduce phase (1.340 s) is shorter than the sum of the separate backward (809 ms) + all_reduce
+  (1.049 s = 1.858 s) phases, saving ~500 ms per step.
+
+
