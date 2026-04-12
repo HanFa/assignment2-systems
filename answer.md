@@ -299,3 +299,64 @@ The optimal bucket size is therefore:
 
 $$b^* = \frac{s}{n_b^*} = \sqrt{s \cdot w \cdot o}$$
 
+
+**Problem: `communication_accounting`: **
+(a) The total model parameter equals to 2 * d_model * d_ff * num_blocks = 2 * 16384 * 53248 * 126 = 219,848,638,464.
+This is a language model around 220B parameters. So the vRAM usage
+
+* Model parameters in fp32: 220B * 4 bytes / params = 880GB
+* Accumulated gradients in fp32: 220B * 4 bytes / params = 880GB.
+* Optimizer states (Adam's m and v) in fp32: 1760GB
+
+The memory saved for the backward pass is 3520GB which worth around 44 H100 80GB GPUs.
+
+(b) First analyze the activation shape
+
+* Linear 1 activation: shape of (B, S, d_model) -> (B, S, d_model, 2 bytes / params)
+* Linear 2 activation: shape of (B, S, d_ff) -> (B, S, d_ff, 2 bytes / params)
+
+Each rank host a total vRAM consisting of
+
+* Model parameters: 880GB / N_FSDP
+* Optimizer state: 1760GB / N_FSDP
+* Accumulated gradients: 880GB / N_FSDP
+* Half of activations checkpointing (partitioned): 63 * B * S * (16384 + 53248) * 2
+
+```math
+\frac{1}{N_{FSDP}} \left[ \underbrace{4P}_{\text{master weights (FP32)}} + \underbrace{4P}_{\text{accumulated gradients (FP32)}} + \underbrace{8P}_{\text{optimizer states (FP32)}} + \underbrace{63 \times B \times S \times (d_{\text{model}} + d_{\text{ff}}) \times 2}_{\text{half activations (BF16)}} \right]
+```
+
+If we ignore the activation checkpointing, we need at least $N_{FSDP}$ should be 3520 GB / 95 GB per GPU = 38 GPUs.
+
+(c) If $X = 4$ for FSDP and $Y = 2$ for TP, then
+
+```math
+T_{compute} = \frac{4BDF}{XYC}
+```
+
+```math
+T_{\mathrm{tp\_comm}} = \frac{4BD}{X \cdot W_{ici} \cdot M_Y}
+```
+
+```math
+T_{\mathrm{fsdp\_comm}} = \frac{4DF}{Y \cdot W_{ici} \cdot M_X}
+```
+
+and we require
+
+```math
+T_{compute} > \max(T_{\mathrm{tp\_comm}}, T_{\mathrm{fsdp\_comm}})
+```
+
+From $`T_{compute} > T_{\mathrm{tp\_comm}}`$ which is the bounding condition, we got tokens per rank needs to be larger than
+
+```math
+\frac{B}{XY} \geq \frac{C}{Y \cdot W_{ici} \cdot M_X} = 320 \; \mathit{toks\_per\_rank}
+```
+
+And the total batch size is $320 \cdot X \cdot Y$ = 20480 total toks.
+
+
+(d) We can introduce PP at dimension Z such that $X = 8$, $Y = 4$, and $Z = 2$. From the inequation above, if $X$ becomes
+2 times smaller, the minimal total batch size becomes 10240 for this inequation to hold true so that we keep it compute
+bound.
